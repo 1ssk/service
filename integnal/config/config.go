@@ -1,8 +1,8 @@
 package config
 
 import (
+	"github.com/1ssk/service/pkg/postgres"
 	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/test/pkg/postgres"
 )
 
 type Config struct {

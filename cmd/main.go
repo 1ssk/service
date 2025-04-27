@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 
-	"github.com/test/integnal/config"
-	"github.com/test/integnal/service"
-	"github.com/test/pkg/api"
-	"github.com/test/pkg/logger"
-	"github.com/test/pkg/postgres"
+	"github.com/1ssk/service/integnal/config"
+	"github.com/1ssk/service/integnal/service"
+	"github.com/1ssk/service/pkg/api"
+	"github.com/1ssk/service/pkg/logger"
+	"github.com/1ssk/service/pkg/postgres"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 func main() {
 	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
 	ctx, _ = logger.New(ctx)
 
 	cfg, err := config.New()
@@ -24,7 +28,7 @@ func main() {
 		logger.GetLoggerFromCtx(ctx).Fatal(ctx, "failed to load config", zap.Error(err))
 	}
 
-	_, err = postgres.New(cfg.Postgres)
+	pool, err := postgres.New(ctx, cfg.Postgres)
 	if err != nil {
 		logger.GetLoggerFromCtx(ctx).Fatal(ctx, "failed to connect database", zap.Error(err))
 	}
@@ -38,8 +42,17 @@ func main() {
 	server := grpc.NewServer(grpc.UnaryInterceptor(logger.Interceptor))
 	api.RegisterOrderServiceServer(server, srv)
 
-	if err := server.Serve(lis); err != nil {
-		logger.GetLoggerFromCtx(ctx).Info(ctx, "dsa", zap.Error(err))
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			logger.GetLoggerFromCtx(ctx).Info(ctx, "failed to serve", zap.Error(err))
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		server.GracefulStop()
+		pool.Close()
+		logger.GetLoggerFromCtx(ctx).Info(ctx, "server stopped")
 	}
 
 }

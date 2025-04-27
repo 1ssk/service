@@ -1,6 +1,6 @@
 package service
 
-import "github.com/test/pkg/api"
+import "github.com/1ssk/service/pkg/api"
 
 type Service struct {
 	api.OrderServiceServer
